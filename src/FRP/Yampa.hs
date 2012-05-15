@@ -98,7 +98,7 @@
 module FRP.Yampa (
 -- Re-exported module, classes, and types
     module Control.Arrow,
-    module FRP.Yampa.VectorSpace,
+    module Data.VectorSpace,
     RandomGen(..),
     Random(..),
 
@@ -238,14 +238,14 @@ module FRP.Yampa (
     delay,		-- :: Time -> a -> SF a a
 
 -- Integration and differentiation
-    integral,		-- :: VectorSpace a s => SF a a
+    integral,		-- :: (VectorSpace a, s ~ Scalar a, Fractional s) => SF a a
 
-    derivative,		-- :: VectorSpace a s => SF a a		-- Crude!
-    imIntegral,		-- :: VectorSpace a s => a -> SF a a
+    derivative,		-- :: (VectorSpace a, s ~ Scalar a, Fractional s) => SF a a		-- Crude!
+    imIntegral,		-- :: (VectorSpace a, s ~ Scalar a, Fractional s) => a -> SF a a
 
 -- Loops with guaranteed well-defined feedback
     loopPre, 		-- :: c -> SF (a,c) (b,c) -> SF a b
-    loopIntegral,	-- :: VectorSpace c s => SF (a,c) (b,c) -> SF a b
+    loopIntegral,	-- :: (VectorSpace c, s ~ Scalar c, Fractional s) => SF (a,c) (b,c) -> SF a b
 
 -- Pointwise functions on events
     noEvent,		-- :: Event a
@@ -317,7 +317,7 @@ import Control.Arrow
 import FRP.Yampa.Diagnostics
 import FRP.Yampa.Miscellany (( # ), dup, swap)
 import FRP.Yampa.Event
-import FRP.Yampa.VectorSpace
+import Data.VectorSpace
 
 import Data.IORef
 
@@ -2973,10 +2973,10 @@ delay q a_init | q < 0     = usrErr "AFRP" "delay" "Negative delay."
 
 -- Integration using the rectangle rule.
 {-# INLINE integral #-}
-integral :: VectorSpace a s => SF a a
+integral :: (VectorSpace a, s ~ Scalar a, Fractional s) => SF a a
 integral = SF {sfTF = tf0}
     where
-        igrl0  = zeroVector
+        igrl0  = zeroV
 
 	tf0 a0 = (integralAux igrl0 a0, igrl0)
 
@@ -2988,7 +2988,7 @@ integral = SF {sfTF = tf0}
 
 
 -- "immediate" integration (using the function's value at the current time)
-imIntegral :: VectorSpace a s => a -> SF a a
+imIntegral :: (VectorSpace a, s ~ Scalar a, Fractional s) => a -> SF a a
 imIntegral = ((\ _ a' dt v -> v ^+^ realToFrac dt *^ a') `iterFrom`)
 
 iterFrom :: (a -> a -> DTime -> b -> b) -> b -> SF a b
@@ -2998,10 +2998,10 @@ f `iterFrom` b = SF (iterAux b) where
 
 
 -- This is extremely crude. Use at your own risk.
-derivative :: VectorSpace a s => SF a a
+derivative :: (VectorSpace a, s ~ Scalar a, Fractional s) => SF a a
 derivative = SF {sfTF = tf0}
     where
-	tf0 a0 = (derivativeAux a0, zeroVector)
+	tf0 a0 = (derivativeAux a0, zeroV)
 
 	derivativeAux a_prev = SF' tf -- True
 	    where
@@ -3017,7 +3017,7 @@ loopPre c_init sf = loop (second (iPre c_init) >>> sf)
 
 
 
-loopIntegral :: VectorSpace c s => SF (a,c) (b,c) -> SF a b
+loopIntegral :: (VectorSpace c, s ~ Scalar c, Fractional s) => SF (a,c) (b,c) -> SF a b
 loopIntegral sf = loop (second integral >>> sf)
 
 

@@ -1,3 +1,4 @@
+{-# LANGUAGE GADTs #-}
 -----------------------------------------------------------------------------------------
 -- |
 -- Module      :  FRP.Yampa.Utilities
@@ -13,7 +14,7 @@
 -- ToDo:
 --
 -- * Possibly add
---       impulse :: VectorSpace a k => a -> Event a
+--       impulse :: (AffineSpace a, b ~ Diff a) => a -> Event b
 --   But to do that, we need access to Event, which we currently do not have.
 --
 -- * The general arrow utilities should be moved to a module
@@ -89,8 +90,8 @@ module FRP.Yampa.Utilities (
     fby,		-- :: b -> SF a b -> SF a b,	infixr 0
 
 -- Integrals
-    impulseIntegral,	-- :: VectorSpace a k => SF (a, Event a) a
-    old_impulseIntegral	-- :: VectorSpace a k => SF (a, Event a) a
+    impulseIntegral,	-- :: (VectorSpace a, k ~ Scalar a, Fractional k) => SF (a, Event a) a
+    old_impulseIntegral	-- :: (VectorSpace a, k ~ Scalar a, Fractional k) => SF (a, Event a) a
 ) where
 
 import FRP.Yampa.Diagnostics
@@ -241,6 +242,7 @@ sampleWindow wl q =
 -- Parallel composition/switchers with "zip" routing
 ------------------------------------------------------------------------------
 
+-- Note that safeZip produces list with same length as third argument
 safeZip :: String -> [a] -> [b] -> [(a,b)]
 safeZip fn as bs = safeZip' as bs
     where
@@ -253,6 +255,7 @@ safeZip fn as bs = safeZip' as bs
 	tail' []     = err
 	tail' (_:as) = as
 
+	err :: a
 	err = usrErr "AFRPUtilities" fn "Input list too short."
 
 
@@ -345,8 +348,8 @@ b0 `fby` sf = b0 --> sf >>> pre
 -- Integrals
 ------------------------------------------------------------------------------
 
-impulseIntegral :: VectorSpace a k => SF (a, Event a) a
-impulseIntegral = (integral *** accumHoldBy (^+^) zeroVector) >>^ uncurry (^+^)
+impulseIntegral :: (VectorSpace a, k ~ Scalar a, Fractional k) => SF (a, Event a) a
+impulseIntegral = (integral *** accumHoldBy (^+^) zeroV) >>^ uncurry (^+^)
 
-old_impulseIntegral :: VectorSpace a k => SF (a, Event a) a
-old_impulseIntegral = (integral *** old_accumHoldBy (^+^) zeroVector) >>^ uncurry (^+^)
+old_impulseIntegral :: (VectorSpace a, k ~ Scalar a, Fractional k) => SF (a, Event a) a
+old_impulseIntegral = (integral *** old_accumHoldBy (^+^) zeroV) >>^ uncurry (^+^)
