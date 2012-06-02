@@ -74,7 +74,7 @@
 module FRP.Yampa.Event where
 
 import FRP.Yampa.Diagnostics
-import FRP.Yampa.Forceable
+import Control.DeepSeq
 
 
 infixl 8 `tag`, `attach`, `gate`
@@ -145,12 +145,12 @@ instance Functor Event where
 
 
 ------------------------------------------------------------------------------
--- Forceable instance
+-- NFData instance
 ------------------------------------------------------------------------------
 
-instance Forceable a => Forceable (Event a) where
-    force ea@NoEvent   = ea
-    force ea@(Event a) = force a `seq` ea
+instance NFData a => NFData (Event a) where
+    rnf NoEvent   = ()
+    rnf (Event a) = rnf a
 
 
 ------------------------------------------------------------------------------

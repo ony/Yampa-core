@@ -36,13 +36,12 @@ library
   hs-source-dirs:  src
   ghc-options : -O3 -Wall -fno-warn-name-shadowing
   extensions: GADTs, TypeFamilies, Rank2Types, CPP
-  build-Depends: base < 5, random, vector-space >= 0.5
+  build-Depends: base < 5, random, vector-space >= 0.5, deepseq >= 1.1
   exposed-modules:
     FRP.Yampa
     FRP.Yampa.Event
     FRP.Yampa.MergeableRecord
     FRP.Yampa.Utilities
-    FRP.Yampa.Forceable
     FRP.Yampa.Miscellany
     FRP.Yampa.Task
     FRP.Yampa.Internals
