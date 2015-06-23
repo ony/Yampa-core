@@ -1,4 +1,4 @@
-{-# LANGUAGE GADTs, Rank2Types, CPP #-}
+{-# LANGUAGE GADTs, Rank2Types, CPP, FlexibleContexts #-}
 -----------------------------------------------------------------------------------------
 -- |
 -- Module      :  FRP.Yampa

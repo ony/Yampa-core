@@ -30,6 +30,8 @@ module FRP.Yampa.Task (
     forEver 	-- :: Monad m => m a -> m b
 ) where
 
+import Control.Monad (liftM, ap)
+
 import FRP.Yampa
 import FRP.Yampa.Utilities (snap)
 import FRP.Yampa.Diagnostics
@@ -87,6 +89,21 @@ taskToSF tk = runTask tk
 	isEdge (Right _) (Right _) = Nothing
 	isEdge (Right _) (Left _)  = Nothing
 
+
+------------------------------------------------------------------------------
+-- Functor instance
+------------------------------------------------------------------------------
+
+instance Functor (Task a b) where
+    fmap = liftM
+
+------------------------------------------------------------------------------
+-- Applicative instance
+------------------------------------------------------------------------------
+
+instance Applicative (Task a b) where
+    pure  = return
+    (<*>) = ap
 
 ------------------------------------------------------------------------------
 -- Monad instance
