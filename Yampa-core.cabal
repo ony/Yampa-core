@@ -4,15 +4,16 @@ cabal-version: >= 1.6
 license: BSD3
 license-file: LICENSE
 author: Henrik Nilsson, Antony Courtney
-maintainer: George Giorgidze (giorgidze@gmail.com)
-homepage: http://www.haskell.org/haskellwiki/Yampa
+maintainer: Mykola Orliuk (virkony@gmail.com)
+homepage: https://github.com/ony/Yampa-core
 category: Reactivity, FRP
 synopsis: Library for programming hybrid systems.
 
 description:  Domain-specific language embedded in Haskell for programming
               hybrid (mixed discrete-time and continuous-time) systems. Yampa is based on
               the concepts of Functional Reactive Programming (FRP) and is structured using
-              arrow combinators.
+              arrow combinators. Yampa-core is a version of Yamp that delegates most of
+              to other Haskell libraries like deepseq and vector-space.
 
 build-type: Simple
 extra-source-files:
@@ -52,6 +53,6 @@ source-repository head
   type:     git
   location: git://github.com/giorgidze/Yampa.git
 
-source-repository this
+source-repository head
   type:     git
   location: git://github.com/ony/Yampa-core.git
