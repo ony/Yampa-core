@@ -1,4 +1,4 @@
-{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE CPP, Rank2Types #-}
 -----------------------------------------------------------------------------------------
 -- |
 -- Module      :  FRP.Yampa.Task
@@ -15,25 +15,28 @@
 
 module FRP.Yampa.Task (
     Task,
-    mkTask,	-- :: SF a (b, Event c) -> Task a b c
-    runTask,	-- :: Task a b c -> SF a (Either b c)	-- Might change.
-    runTask_,	-- :: Task a b c -> SF a b
-    taskToSF,	-- :: Task a b c -> SF a (b, Event c)	-- Might change.
-    constT,	-- :: b -> Task a b c
-    sleepT, 	-- :: Time -> b -> Task a b ()
-    snapT, 	-- :: Task a b a
-    timeOut, 	-- :: Task a b c -> Time -> Task a b (Maybe c)
-    abortWhen, 	-- :: Task a b c -> SF a (Event d) -> Task a b (Either c d)
-    repeatUntil,-- :: Monad m => m a -> (a -> Bool) -> m a
-    for, 	-- :: Monad m => a -> (a -> a) -> (a -> Bool) -> m b -> m ()
-    forAll, 	-- :: Monad m => [a] -> (a -> m b) -> m ()
-    forEver 	-- :: Monad m => m a -> m b
+    mkTask,      -- :: SF a (b, Event c) -> Task a b c
+    runTask,     -- :: Task a b c -> SF a (Either b c)    -- Might change.
+    runTask_,    -- :: Task a b c -> SF a b
+    taskToSF,    -- :: Task a b c -> SF a (b, Event c)    -- Might change.
+    constT,      -- :: b -> Task a b c
+    sleepT,      -- :: Time -> b -> Task a b ()
+    snapT,       -- :: Task a b a
+    timeOut,     -- :: Task a b c -> Time -> Task a b (Maybe c)
+    abortWhen,   -- :: Task a b c -> SF a (Event d) -> Task a b (Either c d)
+    repeatUntil, -- :: Monad m => m a -> (a -> Bool) -> m a
+    for,         -- :: Monad m => a -> (a -> a) -> (a -> Bool) -> m b -> m ()
+    forAll,      -- :: Monad m => [a] -> (a -> m b) -> m ()
+    forEver      -- :: Monad m => m a -> m b
 ) where
 
-import Control.Monad (liftM, ap)
+import Control.Monad (when, forM_)
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative (Applicative(..))
+#endif
 
 import FRP.Yampa
-import FRP.Yampa.Utilities (snap)
+import FRP.Yampa.EventS (snap)
 import FRP.Yampa.Diagnostics
 
 infixl 0 `timeOut`, `abortWhen`, `repeatUntil`
@@ -64,7 +67,7 @@ mkTask st = Task (switch (st >>> first (arr Left)))
 -- running. Once the task has terminated, the output goes constant with
 -- the value Right x, where x is the value of the terminating event.
 runTask :: Task a b c -> SF a (Either b c)
-runTask tk = (unTask tk) (\c -> constant (Right c))
+runTask tk = (unTask tk) (constant . Right)
 
 
 -- Runs a task. The output becomes undefined once the underlying task has
@@ -80,37 +83,29 @@ runTask_ tk = runTask tk
 -- Law: mkTask (taskToSF task) = task (but not (quite) vice versa.)
 taskToSF :: Task a b c -> SF a (b, Event c)
 taskToSF tk = runTask tk
-	      >>> (arr (either id ((usrErr "AFRPTask" "runTask_"
-                                           "Task terminated!")))
-		   &&& edgeBy isEdge (Left undefined))
+              >>> (arr (either id (usrErr "AFRPTask" "runTask_"
+                                          "Task terminated!"))
+                   &&& edgeBy isEdge (Left undefined))
     where
         isEdge (Left _)  (Left _)  = Nothing
-	isEdge (Left _)  (Right c) = Just c
-	isEdge (Right _) (Right _) = Nothing
-	isEdge (Right _) (Left _)  = Nothing
+        isEdge (Left _)  (Right c) = Just c
+        isEdge (Right _) (Right _) = Nothing
+        isEdge (Right _) (Left _)  = Nothing
 
 
 ------------------------------------------------------------------------------
--- Functor instance
+-- Functor, Applicative and Monad instance
 ------------------------------------------------------------------------------
 
 instance Functor (Task a b) where
-    fmap = liftM
-
-------------------------------------------------------------------------------
--- Applicative instance
-------------------------------------------------------------------------------
+    fmap f tk = Task (\k -> unTask tk (k . f))
 
 instance Applicative (Task a b) where
-    pure  = return
-    (<*>) = ap
-
-------------------------------------------------------------------------------
--- Monad instance
-------------------------------------------------------------------------------
+    pure x  = Task (\k -> k x)
+    f <*> v = Task (\k -> (unTask f) (\c -> unTask v (k . c)))
 
 instance Monad (Task a b) where
-    tk >>= f = Task (\k -> (unTask tk) (\c -> unTask (f c) k))
+    tk >>= f = Task (\k -> unTask tk (\c -> unTask (f c) k))
     return x = Task (\k -> k x)
 
 {-
@@ -179,8 +174,7 @@ timeOut :: Task a b c -> Time -> Task a b (Maybe c)
 tk `timeOut` t = mkTask ((taskToSF tk &&& after t ()) >>> arr aux)
     where
         aux ((b, ec), et) = (b, (lMerge (fmap Just ec)
-					(fmap (const Nothing) et)))
-
+                                 (fmap (const Nothing) et)))
 
 -- Run a "guarding" event source (SF a (Event b)) in parallel with a
 -- (possibly non-terminating) task. The task will be aborted at the
@@ -210,12 +204,12 @@ m `repeatUntil` p = m >>= \x -> if not (p x) then repeatUntil m p else return x
 -- C-style for-loop.
 -- Example: for 0 (+1) (>=10) ...
 for :: Monad m => a -> (a -> a) -> (a -> Bool) -> m b -> m ()
-for i f p m = if p i then m >> for (f i) f p m else return ()
+for i f p m = when (p i) $ m >> for (f i) f p m
 
 
 -- Perform the monadic operation for each element in the list.
 forAll :: Monad m => [a] -> (a -> m b) -> m ()
-forAll = flip mapM_
+forAll = forM_
 
 
 -- Repeat m for ever.

@@ -68,13 +68,19 @@
 --   or:     introcuce 'event = Event', call what's now 'event' 'fromEvent',
 --           and call what's now called 'fromEvent' something else, like
 --           'unsafeFromEvent'??? Better, dump it! After all, using current
---	     names, 'fromEvent = event undefined'!
+--           names, 'fromEvent = event undefined'!
 -----------------------------------------------------------------------------------------
 
 module FRP.Yampa.Event where
 
+-- Event is an instance of Functor, Eq, and Ord. Some method instances:
+-- fmap :: (a -> b) -> Event a -> Event b
+-- (==)     :: Event a -> Event a -> Bool
+-- (<=) :: Event a -> Event a -> Bool
+
+import Control.DeepSeq (NFData(..))
+
 import FRP.Yampa.Diagnostics
-import Control.DeepSeq
 
 
 infixl 8 `tag`, `attach`, `gate`
@@ -94,20 +100,24 @@ infixl 6 `lMerge`, `rMerge`, `merge`
 -- Also note that it unfortunately is possible to partially break the
 -- abstractions through judicious use of e.g. snap and switching.
 
+-- | A single possible event occurrence, that is, a value that may or may
+-- not occur. Events are used to represent values that are not produced
+-- continuously, such as mouse clicks (only produced when the mouse is clicked,
+-- as opposed to mouse positions, which are always defined).
 data Event a = NoEvent | Event a deriving (Show)
 
--- Make the NoEvent constructor available. Useful e.g. for initialization,
+-- | Make the NoEvent constructor available. Useful e.g. for initialization,
 -- ((-->) & friends), and it's easily available anyway (e.g. mergeEvents []).
 noEvent :: Event a
 noEvent = NoEvent
 
 
--- Suppress any event in the first component of a pair.
+-- | Suppress any event in the first component of a pair.
 noEventFst :: (Event a, b) -> (Event c, b)
 noEventFst (_, b) = (NoEvent, b)
 
 
--- Suppress any event in the second component of a pair.
+-- | Suppress any event in the second component of a pair.
 noEventSnd :: (a, Event b) -> (a, Event c)
 noEventSnd (a, _) = (a, NoEvent)
 
@@ -147,11 +157,9 @@ instance Functor Event where
 ------------------------------------------------------------------------------
 -- NFData instance
 ------------------------------------------------------------------------------
-
 instance NFData a => NFData (Event a) where
     rnf NoEvent   = ()
-    rnf (Event a) = rnf a
-
+    rnf (Event a) = rnf a `seq` ()
 
 ------------------------------------------------------------------------------
 -- Internal utilities for event construction
@@ -169,19 +177,22 @@ maybeToEvent (Just a) = Event a
 -- Utility functions similar to those available for Maybe
 ------------------------------------------------------------------------------
 
--- An event-based version of the maybe function.
+-- | An event-based version of the maybe function.
 event :: a -> (b -> a) -> Event b -> a
 event a _ NoEvent   = a
 event _ f (Event b) = f b
 
+-- | Extract the value from an event. Fails if there is no event.
 fromEvent :: Event a -> a
 fromEvent (Event a) = a
 fromEvent NoEvent   = usrErr "AFRP" "fromEvent" "Not an event."
 
+-- | Tests whether the input represents an actual event.
 isEvent :: Event a -> Bool
 isEvent NoEvent   = False
 isEvent (Event _) = True
 
+-- | Negation of 'isEvent'.
 isNoEvent :: Event a -> Bool
 isNoEvent = not . isEvent
 
@@ -190,14 +201,16 @@ isNoEvent = not . isEvent
 -- Event tagging
 ------------------------------------------------------------------------------
 
--- Tags an (occurring) event with a value ("replacing" the old value).
+-- | Tags an (occurring) event with a value ("replacing" the old value).
 tag :: Event a -> b -> Event b
 e `tag` b = fmap (const b) e
 
+-- | Tags an (occurring) event with a value ("replacing" the old value). Same
+-- as 'tag' with the arguments swapped.
 tagWith :: b -> Event a -> Event b
 tagWith = flip tag
 
--- Attaches an extra value to the value of an occurring event.
+-- | Attaches an extra value to the value of an occurring event.
 attach :: Event a -> b -> Event (a, b)
 e `attach` b = fmap (\a -> (a, b)) e
 
@@ -214,57 +227,58 @@ e `attach` b = fmap (\a -> (a, b)) e
 -- !!! Finally: mergeEvents is left-biased, but this is not reflected in
 -- !!! its name.
 
--- Left-biased event merge.
+-- | Left-biased event merge (always prefer left event, if present).
 lMerge :: Event a -> Event a -> Event a
 le `lMerge` re = event re Event le
 
 
--- Right-biased event merge.
+-- | Right-biased event merge (always prefer right event, if present).
 rMerge :: Event a -> Event a -> Event a
 le `rMerge` re = event le Event re
 
 
--- Unbiased event merge: simultaneous occurrence is an error.
+-- | Unbiased event merge: simultaneous occurrence is an error.
 merge :: Event a -> Event a -> Event a
 merge = mergeBy (usrErr "AFRP" "merge" "Simultaneous event occurrence.")
 
 
--- Event merge paramterezied on the conflict resolution function.
+-- | Event merge parameterized by a conflict resolution function.
 mergeBy :: (a -> a -> a) -> Event a -> Event a -> Event a
 mergeBy _       NoEvent      NoEvent      = NoEvent
 mergeBy _       le@(Event _) NoEvent      = le
 mergeBy _       NoEvent      re@(Event _) = re
 mergeBy resolve (Event l)    (Event r)    = Event (resolve l r)
 
-
--- A generic event merge utility:
-mapMerge :: (a -> c) -> (b -> c) -> (a -> b -> c) 
-	    -> Event a -> Event b -> Event c
-mapMerge _  _  _   NoEvent   NoEvent = NoEvent
-mapMerge lf _  _   (Event l) NoEvent = Event (lf l)
-mapMerge _  rf _   NoEvent  (Event r) = Event (rf r)
+-- | A generic event merge-map utility that maps event occurrences,
+-- merging the results. The first three arguments are mapping functions,
+-- the third of which will only be used when both events are present.
+-- Therefore, 'mergeBy' = 'mapMerge' 'id' 'id'
+mapMerge :: (a -> c) -> (b -> c) -> (a -> b -> c)
+            -> Event a -> Event b -> Event c
+mapMerge _  _  _   NoEvent   NoEvent   = NoEvent
+mapMerge lf _  _   (Event l) NoEvent   = Event (lf l)
+mapMerge _  rf _   NoEvent   (Event r) = Event (rf r)
 mapMerge _  _  lrf (Event l) (Event r) = Event (lrf l r)
 
--- Merging of a list of events; foremost event has priority.
+-- | Merge a list of events; foremost event has priority.
 mergeEvents :: [Event a] -> Event a
 mergeEvents = foldr lMerge NoEvent
 
-
--- Collects simultaneous event occurrences; no event if none.
+-- | Collect simultaneous event occurrences; no event if none.
 catEvents :: [Event a] -> Event [a]
 catEvents eas = case [ a | Event a <- eas ] of
-		    [] -> NoEvent
-		    as -> Event as
+                    [] -> NoEvent
+                    as -> Event as
 
-
--- Join (conjucntion) of two events.
+-- | Join (conjunction) of two events. Only produces an event
+-- if both events exist.
 joinE :: Event a -> Event b -> Event (a,b)
 joinE NoEvent   _         = NoEvent
 joinE _         NoEvent   = NoEvent
 joinE (Event l) (Event r) = Event (l,r)
 
 
--- Split event carrying pairs into two events.
+-- | Split event carrying pairs into two events.
 splitE :: Event (a,b) -> (Event a, Event b)
 splitE NoEvent       = (NoEvent, NoEvent)
 splitE (Event (a,b)) = (Event a, Event b)
@@ -274,21 +288,22 @@ splitE (Event (a,b)) = (Event a, Event b)
 -- Event filtering
 ------------------------------------------------------------------------------
 
--- Filter out events that don't satisfy some predicate.
+-- | Filter out events that don't satisfy some predicate.
 filterE :: (a -> Bool) -> Event a -> Event a
-filterE p e@(Event a) = if (p a) then e else NoEvent
+filterE p e@(Event a) = if p a then e else NoEvent
 filterE _ NoEvent     = NoEvent
 
 
--- Combined event mapping and filtering.
+-- | Combined event mapping and filtering. Note: since 'Event' is a 'Functor',
+-- see 'fmap' for a simpler version of this function with no filtering.
 mapFilterE :: (a -> Maybe b) -> Event a -> Event b
 mapFilterE _ NoEvent   = NoEvent
 mapFilterE f (Event a) = case f a of
-			    Nothing -> NoEvent
-			    Just b  -> Event b
+                            Nothing -> NoEvent
+                            Just b  -> Event b
 
 
--- Enable/disable event occurences based on an external condition.
+-- | Enable/disable event occurences based on an external condition.
 gate :: Event a -> Bool -> Event a
 _ `gate` False = NoEvent
 e `gate` True  = e
