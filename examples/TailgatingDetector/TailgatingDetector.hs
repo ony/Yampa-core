@@ -44,6 +44,8 @@ import Data.List (sortBy, (\\))
 
 import FRP.Yampa
 import FRP.Yampa.Utilities
+import FRP.Yampa.Conditional
+import FRP.Yampa.EventS
 
 
 ------------------------------------------------------------------------------

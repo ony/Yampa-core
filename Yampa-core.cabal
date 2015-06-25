@@ -12,8 +12,8 @@ synopsis: Library for programming hybrid systems.
 description:  Domain-specific language embedded in Haskell for programming
               hybrid (mixed discrete-time and continuous-time) systems. Yampa is based on
               the concepts of Functional Reactive Programming (FRP) and is structured using
-              arrow combinators. Yampa-core is a version of Yamp that delegates most of
-              to other Haskell libraries like deepseq and vector-space.
+              arrow combinators. Yampa-core is a fork of Yampa that prefer to use other
+              Haskell libraries like deepseq and vector-space.
 
 build-type: Simple
 extra-source-files:
@@ -40,6 +40,16 @@ extra-source-files:
 flag test-hlint
   default: False
   manual: True
+
+flag test-afrp
+  default: False
+  manual: True
+  description: Enable semi-manual tests (monitor space-time leak)
+
+flag examples
+  default: False
+  manual: True
+  description: Build all examples
 
 library
   hs-source-dirs:  src
@@ -87,6 +97,34 @@ test-suite hlint
     build-depends:
       base,
       hlint >= 1.7
+
+test-suite testAFRP
+  type: exitcode-stdio-1.0
+  main-is: testAFRPMain.hs
+  hs-source-dirs: tests
+  build-depends:
+    base,
+    Yampa-core <0.3
+  if !flag(test-afrp)
+    buildable: False
+
+executable YampaElevator
+  main-is: TestElevatorMain.hs
+  hs-source-dirs: examples/Elevator
+  build-depends:
+    base <5,
+    Yampa-core <0.3
+  if !flag(examples)
+    buildable: False
+
+executable YampaTailgatingDetector
+  main-is: TestTGMain.hs
+  hs-source-dirs: examples/TailgatingDetector
+  build-depends:
+    base <5,
+    Yampa-core <0.3
+  if !flag(examples)
+    buildable: False
 
 source-repository head
   type:     git
